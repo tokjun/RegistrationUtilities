@@ -30,8 +30,9 @@ class MakeHiResLabel:
     slicer.selfTests['MakeHiResLabel'] = self.runTest
 
   def runTest(self):
-    tester = MakeHiResLabelTest()
-    tester.runTest()
+    #tester = MakeHiResLabelTest()
+    #tester.runTest()
+    pass
 
 #
 # qMakeHiResLabelWidget
@@ -102,7 +103,7 @@ class MakeHiResLabelWidget:
     self.outputSelector = slicer.qMRMLNodeComboBox()
     self.outputSelector.nodeTypes = ( ("vtkMRMLScalarVolumeNode"), "" )
     self.outputSelector.addAttribute( "vtkMRMLScalarVolumeNode", "LabelMap", 1)
-    self.outputSelector.selectNodeUponCreation = False
+    self.outputSelector.selectNodeUponCreation = True
     self.outputSelector.addEnabled = True
     self.outputSelector.removeEnabled = True
     self.outputSelector.noneEnabled = True
@@ -259,43 +260,6 @@ class MakeHiResLabelLogic:
     self.infoLayout.addWidget(self.label)
     qt.QTimer.singleShot(msec, self.info.close)
     self.info.exec_()
-
-  def takeScreenshot(self,name,description,type=-1):
-    # show the message even if not taking a screen shot
-    self.delayDisplay(description)
-
-    if self.enableScreenshots == 0:
-      return
-
-    lm = slicer.app.layoutManager()
-    # switch on the type to get the requested window
-    widget = 0
-    if type == -1:
-      # full window
-      widget = slicer.util.mainWindow()
-    elif type == slicer.qMRMLScreenShotDialog().FullLayout:
-      # full layout
-      widget = lm.viewport()
-    elif type == slicer.qMRMLScreenShotDialog().ThreeD:
-      # just the 3D window
-      widget = lm.threeDWidget(0).threeDView()
-    elif type == slicer.qMRMLScreenShotDialog().Red:
-      # red slice window
-      widget = lm.sliceWidget("Red")
-    elif type == slicer.qMRMLScreenShotDialog().Yellow:
-      # yellow slice window
-      widget = lm.sliceWidget("Yellow")
-    elif type == slicer.qMRMLScreenShotDialog().Green:
-      # green slice window
-      widget = lm.sliceWidget("Green")
-
-    # grab and convert to vtk image data
-    qpixMap = qt.QPixmap().grabWidget(widget)
-    qimage = qpixMap.toImage()
-    imageData = vtk.vtkImageData()
-    slicer.qMRMLUtils().qImageToVtkImageData(qimage,imageData)
-
-    #annotationLogic = slicer.modules.annotations.logic()
 
   def run(self,inputVolume,outputVolume,pixelSizeX,pixelSizeY,pixelSizeZ):
     """
