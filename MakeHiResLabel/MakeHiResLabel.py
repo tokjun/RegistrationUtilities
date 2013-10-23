@@ -11,7 +11,7 @@ class MakeHiResLabel:
     parent.title = "MakeHiResLabel" # TODO make this more human readable by adding spaces
     parent.categories = ["Examples"]
     parent.dependencies = []
-    parent.contributors = ["Jean-Christophe Fillion-Robin (Kitware), Steve Pieper (Isomics)"] # replace with "Firstname Lastname (Org)"
+    parent.contributors = ["Junichi Tokuda (BWH)"]
     parent.helpText = """
     This is an example of scripted loadable module bundled in an extension.
     """
@@ -70,14 +70,6 @@ class MakeHiResLabelWidget:
     reloadFormLayout.addWidget(self.reloadButton)
     self.reloadButton.connect('clicked()', self.onReload)
 
-    # reload and test button
-    # (use this during development, but remove it when delivering
-    #  your module to users)
-    self.reloadAndTestButton = qt.QPushButton("Reload and Test")
-    self.reloadAndTestButton.toolTip = "Reload this module and then run the self tests."
-    reloadFormLayout.addWidget(self.reloadAndTestButton)
-    self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
-
     #
     # Parameters Area
     #
@@ -93,11 +85,11 @@ class MakeHiResLabelWidget:
     #
     self.inputSelector = slicer.qMRMLNodeComboBox()
     self.inputSelector.nodeTypes = ( ("vtkMRMLScalarVolumeNode"), "" )
-    self.inputSelector.addAttribute( "vtkMRMLScalarVolumeNode", "LabelMap", 0 )
-    self.inputSelector.selectNodeUponCreation = True
+    self.inputSelector.addAttribute( "vtkMRMLScalarVolumeNode", "LabelMap", 1 )
+    self.inputSelector.selectNodeUponCreation = False
     self.inputSelector.addEnabled = False
     self.inputSelector.removeEnabled = False
-    self.inputSelector.noneEnabled = False
+    self.inputSelector.noneEnabled = True
     self.inputSelector.showHidden = False
     self.inputSelector.showChildNodeTypes = False
     self.inputSelector.setMRMLScene( slicer.mrmlScene )
@@ -109,11 +101,11 @@ class MakeHiResLabelWidget:
     #
     self.outputSelector = slicer.qMRMLNodeComboBox()
     self.outputSelector.nodeTypes = ( ("vtkMRMLScalarVolumeNode"), "" )
-    self.outputSelector.addAttribute( "vtkMRMLScalarVolumeNode", "LabelMap", 0 )
+    self.outputSelector.addAttribute( "vtkMRMLScalarVolumeNode", "LabelMap", 1)
     self.outputSelector.selectNodeUponCreation = False
     self.outputSelector.addEnabled = True
     self.outputSelector.removeEnabled = True
-    self.outputSelector.noneEnabled = False
+    self.outputSelector.noneEnabled = True
     self.outputSelector.showHidden = False
     self.outputSelector.showChildNodeTypes = False
     self.outputSelector.setMRMLScene( slicer.mrmlScene )
@@ -121,23 +113,22 @@ class MakeHiResLabelWidget:
     parametersFormLayout.addRow("Output Volume: ", self.outputSelector)
 
     #
-    # check box to trigger taking screen shots for later use in tutorials
+    # Pixel size
     #
-    self.enableScreenshotsFlagCheckBox = qt.QCheckBox()
-    self.enableScreenshotsFlagCheckBox.checked = 0
-    self.enableScreenshotsFlagCheckBox.setToolTip("If checked, take screen shots for tutorials. Use Save Data to write them to disk.")
-    parametersFormLayout.addRow("Enable Screenshots", self.enableScreenshotsFlagCheckBox)
+    self.pixelSizeX = qt.QDoubleSpinBox()
+    self.pixelSizeX.setSingleStep(0.1);
+    self.pixelSizeX.setValue(1.0);
+    parametersFormLayout.addRow("PixelSize Factor (X): ", self.pixelSizeX)
 
-    #
-    # scale factor for screen shots
-    #
-    self.screenshotScaleFactorSliderWidget = ctk.ctkSliderWidget()
-    self.screenshotScaleFactorSliderWidget.singleStep = 1.0
-    self.screenshotScaleFactorSliderWidget.minimum = 1.0
-    self.screenshotScaleFactorSliderWidget.maximum = 50.0
-    self.screenshotScaleFactorSliderWidget.value = 1.0
-    self.screenshotScaleFactorSliderWidget.setToolTip("Set scale factor for the screen shots.")
-    parametersFormLayout.addRow("Screenshot scale factor", self.screenshotScaleFactorSliderWidget)
+    self.pixelSizeY = qt.QDoubleSpinBox()
+    self.pixelSizeY.setSingleStep(0.1);
+    self.pixelSizeY.setValue(1.0);
+    parametersFormLayout.addRow("PixelSize Factor (Y): ", self.pixelSizeY)
+
+    self.pixelSizeZ = qt.QDoubleSpinBox()
+    self.pixelSizeZ.setSingleStep(0.1);
+    self.pixelSizeZ.setValue(1.0);
+    parametersFormLayout.addRow("PixelSize Factor (Z): ", self.pixelSizeZ)
 
     #
     # Apply Button
@@ -149,8 +140,8 @@ class MakeHiResLabelWidget:
 
     # connections
     self.applyButton.connect('clicked(bool)', self.onApplyButton)
-    self.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
-    self.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
+    self.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelectInput)
+    self.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelectOutput)
 
     # Add vertical spacer
     self.layout.addStretch(1)
@@ -158,15 +149,29 @@ class MakeHiResLabelWidget:
   def cleanup(self):
     pass
 
-  def onSelect(self):
-    self.applyButton.enabled = self.inputSelector.currentNode() and self.outputSelector.currentNode()
+  def onSelectInput(self):
+    if self.inputSelector.currentNode() != 0:
+      if self.outputSelector.currentNode() != 0:
+        self.applyButton.enabled = self.inputSelector.currentNode() and self.outputSelector.currentNode()
+
+      inode = self.inputSelector.currentNode()
+      pixelSize = inode.GetSpacing()
+      self.pixelSizeX.setValue(pixelSize[0]);
+      self.pixelSizeY.setValue(pixelSize[1]);
+      self.pixelSizeZ.setValue(pixelSize[2]);
+
+  def onSelectOutput(self):
+    if self.inputSelector.currentNode() != 0 and self.outputSelector.currentNode() != 0:
+      self.applyButton.enabled = self.inputSelector.currentNode() and self.outputSelector.currentNode()
 
   def onApplyButton(self):
     logic = MakeHiResLabelLogic()
-    enableScreenshotsFlag = self.enableScreenshotsFlagCheckBox.checked
-    screenshotScaleFactor = int(self.screenshotScaleFactorSliderWidget.value)
+    pixelSizeX = self.pixelSizeX.value;
+    pixelSizeY = self.pixelSizeY.value;
+    pixelSizeZ = self.pixelSizeZ.value;
     print("Run the algorithm")
-    logic.run(self.inputSelector.currentNode(), self.outputSelector.currentNode(), enableScreenshotsFlag,screenshotScaleFactor)
+    logic.run(self.inputSelector.currentNode(), self.outputSelector.currentNode(), pixelSizeX, pixelSizeY, pixelSizeZ)
+
 
   def onReload(self,moduleName="MakeHiResLabel"):
     """Generic reload method for any scripted module.
@@ -213,17 +218,6 @@ class MakeHiResLabelWidget:
     globals()[widgetName.lower()].setup()
     setattr(globals()['slicer'].modules, widgetName, globals()[widgetName.lower()])
 
-  def onReloadAndTest(self,moduleName="MakeHiResLabel"):
-    try:
-      self.onReload()
-      evalString = 'globals()["%s"].%sTest()' % (moduleName, moduleName)
-      tester = eval(evalString)
-      tester.runTest()
-    except Exception, e:
-      import traceback
-      traceback.print_exc()
-      qt.QMessageBox.warning(slicer.util.mainWindow(), 
-          "Reload and Test", 'Exception!\n\n' + str(e) + "\n\nSee Python Console for Stack Trace")
 
 
 #
@@ -301,89 +295,61 @@ class MakeHiResLabelLogic:
     imageData = vtk.vtkImageData()
     slicer.qMRMLUtils().qImageToVtkImageData(qimage,imageData)
 
-    annotationLogic = slicer.modules.annotations.logic()
-    annotationLogic.CreateSnapShot(name, description, type, self.screenshotScaleFactor, imageData)
+    #annotationLogic = slicer.modules.annotations.logic()
 
-  def run(self,inputVolume,outputVolume,enableScreenshots=0,screenshotScaleFactor=1):
+  def run(self,inputVolume,outputVolume,pixelSizeX,pixelSizeY,pixelSizeZ):
     """
     Run the actual algorithm
     """
 
-    self.delayDisplay('Running the aglorithm')
+    #Run Label Map Smoothing Module: Smooth the moving label with Max RMs Err = 1 and Sigma =2.
+    tmpImageLMS = slicer.vtkMRMLScalarVolumeNode()
+    tmpImageLMS.SetName('tmp_LMS')
+    slicer.mrmlScene.AddNode(tmpImageLMS)
 
-    self.enableScreenshots = enableScreenshots
-    self.screenshotScaleFactor = screenshotScaleFactor
+    self.delayDisplay('Label Map Smoothing')
+    lms = slicer.modules.labelmapsmoothing
+    parameters = {}
+    parameters['labelToSmooth'] = -1
+    parameters['numberOfIterations'] = 50
+    parameters['maxRMSError'] = 1.0
+    parameters['gaussianSigma'] = 2.0
+    parameters['inputVolume'] = inputVolume.GetID()
+    parameters['outputVolume'] = tmpImageLMS.GetID()
+    slicer.cli.run(lms, None, parameters, True)
 
-    self.takeScreenshot('MakeHiResLabel-Start','Start',-1)
+    #Run Resample Scalar Volume Module:Increase the resolution of the output of previous step by dividing the third entity by 2.
+    tmpImageRSV = slicer.vtkMRMLScalarVolumeNode()
+    tmpImageLMS.SetName('tmp_RSV')
+    slicer.mrmlScene.AddNode(tmpImageRSV)
+
+    self.delayDisplay('Resample Scalar Volume')
+    rsv = slicer.modules.resamplescalarvolume
+    parameters = {}
+    parameters['outputPixelSpacing'] = "%f,%f,%f" % (pixelSizeX, pixelSizeY, pixelSizeZ)
+    parameters['interpolationType'] = 'linear'
+    parameters['InputVolume'] = tmpImageLMS.GetID()
+    parameters['OutputVolume'] = tmpImageRSV.GetID()
+    slicer.cli.run(rsv, None, parameters, True)
+
+    #Run Label Smoothing Module: Smooth the output of previous step with Max RMs Err = 0.5 and Sigma =1.
+    self.delayDisplay('Label Map Smoothing')
+    parameters = {}
+    parameters['labelToSmooth'] = -1
+    parameters['numberOfIterations'] = 50
+    parameters['maxRMSError'] = 0.5
+    parameters['gaussianSigma'] = 1
+    parameters['inputVolume'] = tmpImageRSV.GetID()
+    parameters['outputVolume'] = outputVolume.GetID()
+    slicer.cli.run(lms, None, parameters, True)
+
+    #Remove temporary nodes.
+    slicer.mrmlScene.RemoveNode(tmpImageLMS)
+    slicer.mrmlScene.RemoveNode(tmpImageRSV)
+
+    #Run Image Resample module: Use your Transformation and apply it on the output of the previous step.
+    #Registration Metric: Calculate HD and DSC.
 
     return True
 
 
-class MakeHiResLabelTest(unittest.TestCase):
-  """
-  This is the test case for your scripted module.
-  """
-
-  def delayDisplay(self,message,msec=1000):
-    """This utility method displays a small dialog and waits.
-    This does two things: 1) it lets the event loop catch up
-    to the state of the test so that rendering and widget updates
-    have all taken place before the test continues and 2) it
-    shows the user/developer/tester the state of the test
-    so that we'll know when it breaks.
-    """
-    print(message)
-    self.info = qt.QDialog()
-    self.infoLayout = qt.QVBoxLayout()
-    self.info.setLayout(self.infoLayout)
-    self.label = qt.QLabel(message,self.info)
-    self.infoLayout.addWidget(self.label)
-    qt.QTimer.singleShot(msec, self.info.close)
-    self.info.exec_()
-
-  def setUp(self):
-    """ Do whatever is needed to reset the state - typically a scene clear will be enough.
-    """
-    slicer.mrmlScene.Clear(0)
-
-  def runTest(self):
-    """Run as few or as many tests as needed here.
-    """
-    self.setUp()
-    self.test_MakeHiResLabel1()
-
-  def test_MakeHiResLabel1(self):
-    """ Ideally you should have several levels of tests.  At the lowest level
-    tests sould exercise the functionality of the logic with different inputs
-    (both valid and invalid).  At higher levels your tests should emulate the
-    way the user would interact with your code and confirm that it still works
-    the way you intended.
-    One of the most important features of the tests is that it should alert other
-    developers when their changes will have an impact on the behavior of your
-    module.  For example, if a developer removes a feature that you depend on,
-    your test should break so they know that the feature is needed.
-    """
-
-    self.delayDisplay("Starting the test")
-    #
-    # first, get some data
-    #
-    import urllib
-    downloads = (
-        ('http://slicer.kitware.com/midas3/download?items=5767', 'FA.nrrd', slicer.util.loadVolume),
-        )
-
-    for url,name,loader in downloads:
-      filePath = slicer.app.temporaryPath + '/' + name
-      if not os.path.exists(filePath) or os.stat(filePath).st_size == 0:
-        print('Requesting download %s from %s...\n' % (name, url))
-        urllib.urlretrieve(url, filePath)
-      if loader:
-        print('Loading %s...\n' % (name,))
-        loader(filePath)
-    self.delayDisplay('Finished with download and loading\n')
-
-    volumeNode = slicer.util.getNode(pattern="FA")
-    logic = MakeHiResLabelLogic()
-    self.assertTrue( logic.hasImageData(volumeNode) )
-    self.delayDisplay('Test passed!')
